@@ -1,3 +1,4 @@
+#pragma once
 #include <unistd.h>
 
 #include <algorithm>
@@ -40,11 +41,19 @@ namespace rs = std::ranges;
  */
 auto AnalyseFunctions(const std::vector<std::string> &files,
                       const analyzer::metric::MetricExtractor &metric_extractor) {
-    // здесь ваш код
+    return files | rv::transform([](const std::string &filename) {
+               analyzer::file::File file(filename);
+               analyzer::function::FunctionExtractor extractor;
+               return extractor.Get(file);
+           }) |
+           rv::join | rv::transform([&metric_extractor](const auto &func) {
+               return std::make_pair(func, metric_extractor.Get(func));
+           }) |
+           rs::to<std::vector<std::pair<analyzer::function::Function, analyzer::metric::MetricResults>>>();
 }
 
 /**
- * 
+ *
  * @brief Группирует результаты анализа по классам.
  *
  * Эта функция:
@@ -62,7 +71,13 @@ auto AnalyseFunctions(const std::vector<std::string> &files,
  * действительно исчезают из результата.
  */
 auto SplitByClasses(const auto &analysis) {
-    // здесь ваш код
+    return analysis | rv::filter([](const auto &item) {
+               const auto &[func, _] = item;
+               return func.class_name.has_value();
+           }) |
+           rv::chunk_by([](const auto &rhs, const auto &lhs) { return rhs.first.class_name == lhs.first.class_name; }) |
+           rv::transform([](auto chunk) { return chunk | rs::to<std::vector>(); }) |
+           rs::to<std::vector<std::vector<std::pair<analyzer::function::Function, analyzer::metric::MetricResults>>>>();
 }
 
 /**
@@ -74,7 +89,9 @@ auto SplitByClasses(const auto &analysis) {
  * - Использует `chunk_by`, поэтому **порядок функций в `analysis` должен быть по файлам**.
  */
 auto SplitByFiles(const auto &analysis) {
-    // здесь ваш код
+    return analysis | rv::chunk_by([](const auto &a, const auto &b) { return a.first.filename == b.first.filename; }) |
+           rv::transform([](auto chunk) { return chunk | rs::to<std::vector>(); }) |
+           rs::to<std::vector<std::vector<std::pair<analyzer::function::Function, analyzer::metric::MetricResults>>>>();
 }
 
 /**
@@ -85,9 +102,9 @@ auto SplitByFiles(const auto &analysis) {
  *   (то есть по каждой функции и её метрикам).
  * - Передаёт результаты метрик (`elem.second`) в аккумулятор через `AccumulateNextFunctionResults`.
  */
-void AccumulateFunctionAnalysis(const auto &analysis,
-                                const analyzer::metric_accumulator::MetricsAccumulator &accumulator) {
-    // здесь ваш код
+void AccumulateFunctionAnalysis(const auto &analysis, analyzer::metric_accumulator::MetricsAccumulator &accumulator) {
+    for (const auto &[func, metrics] : analysis) {
+        accumulator.AccumulateNextFunctionResults(metrics);
+    }
 }
-
 }  // namespace analyzer

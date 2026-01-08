@@ -31,8 +31,14 @@ namespace analyzer::metric_accumulator {
  * - Вызывается метод `Accumulate(metric_result)`, который обновляет внутреннее состояние аккумулятора.
  */
 void MetricsAccumulator::AccumulateNextFunctionResults(const std::vector<metric::MetricResult> &metric_results) const {
-    // здесь ваш код
+    rs::for_each(metric_results, [this](const auto &metric_result) {
+        rs::for_each(accumulators |
+                         rv::filter([&](const auto &pair) { return pair.first == metric_result.metric_name; }),
+                     [&](const auto &pair) { pair.second->Accumulate(metric_result); });
+    });
 }
+
+// здесь ваш код
 /**
  * @brief Сбрасывает состояние всех аккумуляторов.
  *
@@ -41,7 +47,7 @@ void MetricsAccumulator::AccumulateNextFunctionResults(const std::vector<metric:
  * который обнуляет накопленные значения (сумму, счётчик и т.д.).
  */
 void MetricsAccumulator::ResetAccumulators() {
-    // здесь ваш код
+    rs::for_each(accumulators | rv::values, [](auto &accumulator) { accumulator->Reset(); });
 }
 
 }  // namespace analyzer::metric_accumulator
